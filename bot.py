@@ -1,9 +1,16 @@
 import os
 from dotenv import load_dotenv
-from telegram import Update, ReplyKeyboardMarkup, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from flask import Flask, request
+from telegram import Update, ReplyKeyboardMarkup, Bot
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    Filters,
+    CallbackContext,
+)
 
+# Load environment variables
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -11,12 +18,10 @@ if not TOKEN:
     print("❌ BOT_TOKEN not found in environment variables!")
     exit(1)
 
-# Create bot and updater
+# Create bot and Flask app
 bot = Bot(token=TOKEN)
 updater = Updater(token=TOKEN, use_context=True)
 dispatcher = updater.dispatcher
-
-# Flask app for webhooks
 flask_app = Flask(__name__)
 
 # === QUIZ LOGIC ===
@@ -101,6 +106,7 @@ questions = [
 user_scores = {}
 user_steps = {}
 
+
 # === Bot Handlers ===
 def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -109,16 +115,16 @@ def start(update: Update, context: CallbackContext):
     user_steps[user_id] = 0
     send_question(update, context)
 
+
 def send_question(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     step = user_steps[user_id]
     q = questions[step]
     markup = ReplyKeyboardMarkup(
-        [[o] for o in q["options"]],
-        one_time_keyboard=True,
-        resize_keyboard=True
+        [[o] for o in q["options"]], one_time_keyboard=True, resize_keyboard=True
     )
     context.bot.send_message(chat_id=user_id, text=q["text"], reply_markup=markup)
+
 
 def answer(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -147,134 +153,51 @@ def answer(update: Update, context: CallbackContext):
     else:
         score = user_scores[user_id]
         if score <= 8:
-            msg = (
-                "🟡 Ты — Исследователь.\n"
-                "Ты только в начале пути и тебе важно разобраться в возможностях, требованиях и стратегиях.\n"
-                "Но это уже отличное начало!"
-            )
+            msg = "🟡 Ты — Исследователь.\nТы только в начале пути..."
         elif score <= 16:
-            msg = (
-                "🟢 Ты — Потенциальный кандидат.\n"
-                "У тебя уже есть подходящие идеи и навыки. "
-                "Немного усилий — и ты сможешь собрать сильное портфолио и выиграть грант."
-            )
+            msg = "🟢 Ты — Потенциальный кандидат.\nУ тебя уже есть подходящие идеи..."
         else:
-            msg = (
-                "🔵 Ты — Готовый аппликант.\n"
-                "Ты собрал всё нужное и готов к подаче. С правильной стратегией у тебя отличные шансы попасть в топ-вуз!"
-            )
-
-        context.bot.send_message(chat_id=user_id, text=f"Твой результат: {score}/24\n\n{msg}")
+            msg = "🔵 Ты — Готовый аппликант.\nТы собрал всё нужное и готов к подаче..."
 
         context.bot.send_message(
-            chat_id=user_id,
-            text=(
-                "🎓 Я поступила в 16 вузов на полный грант и сейчас учусь в топовом liberal arts college в США.\n\n"
-                "🔸 Первый раз — поступила туда, куда не хотела\n"
-                "🔸 Второй — сильно старалась, но всё ещё не идеально\n"
-                "🔸 Третий — правильная стратегия, правильный результат\n\n"
-                "📌 У тебя тоже получится!"
-            ),
+            chat_id=user_id, text=f"Твой результат: {score}/24\n\n{msg}"
         )
-
         context.bot.send_message(
-            chat_id=user_id,
-            text="💡 Хочешь бесплатную стратегию? Напиши результат менеджеру: @speakinkschool"
+            chat_id=user_id, text="🎓 Я поступила в 16 вузов на полный грант..."
+        )
+        context.bot.send_message(
+            chat_id=user_id, text="💡 Напиши результат менеджеру: @speakinkschool"
         )
 
-# Register handlers
+
+# === Dispatcher Handlers ===
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, answer))
 
-# === Flask Routes ===
-@flask_app.route('/')
-def health_check():
-    print("📍 / (root) endpoint accessed")
-    return """
-    <h1>Telegram Bot is Running</h1>
-    <p><a href='/test'>Test Route</a></p>
-    <p><a href='/webhook-status'>Webhook Status</a></p>
-    <p><a href='/debug-routes'>Debug Routes</a></p>
-    <p>Bot is working correctly!</p>
-    """
 
-@flask_app.route('/test', methods=["GET"])
-def test_endpoint():
-    print("📍 /test endpoint accessed")
-    return f'<h1>Test endpoint working!</h1><p>Webhook URL: https://telegram-bot-inkarshokan.replit.app/{TOKEN}</p><p>Current time: {__import__("datetime").datetime.now()}</p>'
-
-@flask_app.route('/webhook-status')
-def webhook_status():
-    """Check webhook status via web endpoint"""
-    print("📍 /webhook-status endpoint accessed")
-    try:
-        status = bot.get_webhook_info()  # No asyncio needed!
-        return f"""
-        <h1>Webhook Status</h1>
-        <p><strong>URL:</strong> {status.url}</p>
-        <p><strong>Pending Updates:</strong> {status.pending_update_count}</p>
-        <p><strong>Max Connections:</strong> {status.max_connections}</p>
-        <p><strong>IP Address:</strong> {status.ip_address}</p>
-        <p><strong>Last Error:</strong> {status.last_error_message or 'None'}</p>
-        <p><strong>Has Certificate:</strong> {status.has_custom_certificate}</p>
-        """
-    except Exception as e:
-        print(f"❌ Error in /webhook-status: {e}")
-        return f"<h1>Error checking webhook: {e}</h1>", 500
-
-@flask_app.route('/debug-routes')
-def debug_routes():
-    """Debug route to show all registered routes"""
-    print("📍 /debug-routes endpoint accessed")
-    routes = []
-    for rule in flask_app.url_map.iter_rules():
-        routes.append(f"{rule.rule} -> {rule.endpoint}")
-    return "<h1>Registered Routes</h1><br>" + "<br>".join(routes)
-
-@flask_app.route(f"/{TOKEN}", methods=["GET", "POST"])
+# === Webhook Endpoint ===
+@flask_app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    print(f"🔄 Received {request.method} request to webhook endpoint")
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "OK", 200
 
-    if request.method == "GET":
-        return 'Webhook endpoint is active', 200
 
-    try:
-        json_data = request.get_json(force=True)
-        if not json_data:
-            return 'Bad Request - No JSON', 400
+# Health check (for browser)
+@flask_app.route("/")
+def home():
+    return "<h1>Telegram bot is running on Render!</h1>"
 
-        print(f"📥 Received webhook data: {json_data}")
 
-        # Create update object and process it
-        update = Update.de_json(json_data, bot)
-        if update:
-            print(f"📨 Processing update {update.update_id}")
-            dispatcher.process_update(update)  # Synchronous processing!
-            return 'OK', 200
-        else:
-            return 'Bad Request - Invalid Update', 400
-
-    except Exception as e:
-        print(f"❌ Webhook error: {e}")
-        return 'Internal Server Error', 500
-
+# === Setup Webhook ===
 def setup_webhook():
-    """Set the webhook URL for the bot"""
-    webhook_url = f"https://telegram-bot-inkarshokan.replit.app/{TOKEN}"
-    try:
-        # Clear webhook first
-        bot.delete_webhook(drop_pending_updates=True)
-        print("🧹 Cleared old webhook and pending updates")
+    webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
+    bot.delete_webhook(drop_pending_updates=True)
+    bot.set_webhook(webhook_url)
+    print(f"✅ Webhook set to {webhook_url}")
 
-        # Set new webhook
-        bot.set_webhook(webhook_url)
-        print(f"✅ Webhook set to: {webhook_url}")
 
-        # Verify webhook
-        webhook_info = bot.get_webhook_info()
-        print(f"✅ Webhook verified: {webhook_info.url}")
-
-    except Exception as e:
-        print(f"❌ Failed to set webhook: {e}")
-
-print("🔁 New version launched with synchronous python-telegram-bot v13.15")
+# === Run the App ===
+if __name__ == "__main__":
+    setup_webhook()
+    flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
