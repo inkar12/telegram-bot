@@ -1,38 +1,24 @@
+# === bot.py (Refactored for python-telegram-bot v20.6) ===
 import os
 from dotenv import load_dotenv
-from flask import Flask, request
-from telegram import Update, ReplyKeyboardMarkup, Bot
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    Updater,
-    CommandHandler,
-    MessageHandler,
-    Filters,
-    CallbackContext,
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    ContextTypes, filters
 )
 
-# Load environment variables
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-
-if not TOKEN:
-    print("❌ BOT_TOKEN not found in environment variables!")
-    exit(1)
-
-# Create bot and Flask app
-bot = Bot(token=TOKEN)
-updater = Updater(token=TOKEN, use_context=True)
-dispatcher = updater.dispatcher
-flask_app = Flask(__name__)
 
 # === QUIZ LOGIC ===
 questions = [
     {
-        "text": "1️⃣ Какой у тебя средний GPA за последние 2 года?",
+        "text": "1\u20e3\ufe0f Какой у тебя средний GPA за последние 2 года?",
         "options": ["Ниже 2.5", "2.5–3.3", "3.4–3.8", "3.9–4.0"],
         "scores": [0, 1, 2, 3],
     },
     {
-        "text": "2️⃣ Как ты оцениваешь свои внеклассные активности (спорт, волонтерство, проекты)?",
+        "text": "2\u20e3\ufe0f Как ты оцениваешь свои внеклассные активности (спорт, волонтерство, проекты)?",
         "options": [
             "Пока нет достижений",
             "Есть базовые активности",
@@ -42,7 +28,7 @@ questions = [
         "scores": [0, 1, 2, 3],
     },
     {
-        "text": "3️⃣ У тебя есть подтверждённый уровень английского языка?",
+        "text": "3\u20e3\ufe0f У тебя есть подтверждённый уровень английского языка?",
         "options": [
             "Нет, вообще",
             "Учусь, но без сертификатов",
@@ -52,7 +38,7 @@ questions = [
         "scores": [0, 1, 2, 3],
     },
     {
-        "text": "4️⃣ Ты знаешь, куда именно хочешь поступать?",
+        "text": "4\u20e3\ufe0f Ты знаешь, куда именно хочешь поступать?",
         "options": [
             "Вообще нет",
             "Есть примерные идеи",
@@ -62,7 +48,7 @@ questions = [
         "scores": [0, 1, 2, 3],
     },
     {
-        "text": "5️⃣ Как ты оцениваешь свои шансы на стипендию?",
+        "text": "5\u20e3\ufe0f Как ты оцениваешь свои шансы на стипендию?",
         "options": [
             "Не верю, что получу",
             "Сомневаюсь, но хочу",
@@ -72,7 +58,7 @@ questions = [
         "scores": [0, 1, 2, 3],
     },
     {
-        "text": "6️⃣ Как ты реагируешь, если что-то не получается — например, отказ в поступлении или плохая оценка?",
+        "text": "6\u20e3\ufe0f Как ты реагируешь, если что-то не получается — например, отказ в поступлении или плохая оценка?",
         "options": [
             "Осмысливаю и строю план камбэка",
             "Сомневаюсь, но продолжаю двигаться",
@@ -82,7 +68,7 @@ questions = [
         "scores": [3, 2, 1, 0],
     },
     {
-        "text": "7️⃣ Что больше всего мотивирует тебя поступать за границу?",
+        "text": "7\u20e3\ufe0f Что больше всего мотивирует тебя поступать за границу?",
         "options": [
             "Свобода и независимость",
             "Сделать семью гордой",
@@ -92,7 +78,7 @@ questions = [
         "scores": [2, 1, 3, 2],
     },
     {
-        "text": "8️⃣ Что для тебя будет самым важным после окончания учёбы?",
+        "text": "8\u20e3\ufe0f Что для тебя будет самым важным после окончания учёбы?",
         "options": [
             "Оказывать влияние и менять мир",
             "Зарабатывать хорошо",
@@ -106,42 +92,33 @@ questions = [
 user_scores = {}
 user_steps = {}
 
-
-# === Bot Handlers ===
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    print(f"📨 Received /start from user {user_id}")
     user_scores[user_id] = 0
     user_steps[user_id] = 0
-    send_question(update, context)
+    await send_question(update, context)
 
-
-def send_question(update: Update, context: CallbackContext):
+async def send_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     step = user_steps[user_id]
     q = questions[step]
     markup = ReplyKeyboardMarkup(
         [[o] for o in q["options"]], one_time_keyboard=True, resize_keyboard=True
     )
-    context.bot.send_message(chat_id=user_id, text=q["text"], reply_markup=markup)
+    await context.bot.send_message(chat_id=user_id, text=q["text"], reply_markup=markup)
 
-
-def answer(update: Update, context: CallbackContext):
+async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    print(f"📨 Received message from user {user_id}: {update.message.text}")
 
     if user_id not in user_steps:
-        context.bot.send_message(
-            chat_id=user_id, text="Привет! Отправь /start чтобы начать квиз."
-        )
+        await context.bot.send_message(chat_id=user_id, text="Привет! Отправь /start чтобы начать квиз.")
         return
 
     step = user_steps[user_id]
     q = questions[step]
+
     if update.message.text not in q["options"]:
-        context.bot.send_message(
-            chat_id=user_id, text="Пожалуйста, выбери один из предложенных вариантов."
-        )
+        await context.bot.send_message(chat_id=user_id, text="Пожалуйста, выбери один из предложенных вариантов.")
         return
 
     idx = q["options"].index(update.message.text)
@@ -149,55 +126,31 @@ def answer(update: Update, context: CallbackContext):
     user_steps[user_id] += 1
 
     if user_steps[user_id] < len(questions):
-        send_question(update, context)
+        await send_question(update, context)
     else:
         score = user_scores[user_id]
         if score <= 8:
-            msg = "🟡 Ты — Исследователь.\nТы только в начале пути..."
+            msg = "🟡 Ты — Исследователь.\nТы только в начале пути и тебе важно разобраться в возможностях, требованиях и стратегиях.\nНо это уже отличное начало!"
         elif score <= 16:
-            msg = "🟢 Ты — Потенциальный кандидат.\nУ тебя уже есть подходящие идеи..."
+            msg = "🟢 Ты — Потенциальный кандидат.\nУ тебя уже есть подходящие идеи и навыки. Немного усилий — и ты сможешь собрать сильное портфолио и выиграть грант."
         else:
-            msg = "🔵 Ты — Готовый аппликант.\nТы собрал всё нужное и готов к подаче..."
+            msg = "🔵 Ты — Готовый аппликант.\nТы собрал всё нужное и готов к подаче. С правильной стратегией у тебя отличные шансы попасть в топ-вуз!"
 
-        context.bot.send_message(
-            chat_id=user_id, text=f"Твой результат: {score}/24\n\n{msg}"
-        )
-        context.bot.send_message(
-            chat_id=user_id, text="🎓 Я поступила в 16 вузов на полный грант..."
-        )
-        context.bot.send_message(
-            chat_id=user_id, text="💡 Напиши результат менеджеру: @speakinkschool"
-        )
+        await context.bot.send_message(chat_id=user_id, text=f"Твой результат: {score}/24\n\n{msg}")
+        await context.bot.send_message(chat_id=user_id, text=(
+            "🎓 Я поступила в 16 вузов на полный грант и сейчас учусь в топовом liberal arts college в США.\n\n"
+            "🔸 Первый раз — поступила туда, куда не хотела\n"
+            "🔸 Второй — сильно старалась, но всё ещё не идеально\n"
+            "🔸 Третий — правильная стратегия, правильный результат\n\n"
+            "📌 У тебя тоже получится!"
+        ))
+        await context.bot.send_message(chat_id=user_id, text="💡 Хочешь бесплатную стратегию? Напиши результат менеджеру: @speakinkschool")
 
-
-# === Dispatcher Handlers ===
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, answer))
-
-
-# === Webhook Endpoint ===
-@flask_app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
-    return "OK", 200
-
-
-# Health check (for browser)
-@flask_app.route("/")
-def home():
-    return "<h1>Telegram bot is running on Render!</h1>"
-
-
-# === Setup Webhook ===
-def setup_webhook():
-    webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
-    bot.delete_webhook(drop_pending_updates=True)
-    bot.set_webhook(webhook_url)
-    print(f"✅ Webhook set to {webhook_url}")
-
-
-# === Run the App ===
-if __name__ == "__main__":
-    setup_webhook()
-    flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, answer))
+async def main():
+    print("🚀 Starting bot...")
+    await app.initialize()
+    await app.start_polling()
+    await app.idle()
