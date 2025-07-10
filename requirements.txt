@@ -2,6 +2,4 @@ Flask==2.3.3
 python-telegram-bot==13.14
 APScheduler==3.6.3
 python-dotenv
-httpx
-urllib3
-standard-imghdr
+python-3.11.9
